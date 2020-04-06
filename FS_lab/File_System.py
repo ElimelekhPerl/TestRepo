@@ -9,7 +9,7 @@ import sys
 # utility functions
 class FileSystem:
     def __init__(self, img_file):
-        with open(img_file, 'rb+') as fs_file:
+        with open(img_file, 'rb+') as fs_file:  # You may NOT reuse kernel file system code
             self.fs_bytes = fs_file.read()
 
         self.b_p_sec = int.from_bytes(self.fs_bytes[11:13], 'little')
@@ -17,7 +17,8 @@ class FileSystem:
         self.rsec_count = int.from_bytes(self.fs_bytes[14:16], 'little')
         self.num_fats = self.fs_bytes[16]
         self.sec_p_fat = int.from_bytes(self.fs_bytes[36:40], 'little')
-        self.root_dir = int.from_bytes(self.fs_bytes[44:48], 'little') * self.b_p_sec * self.sec_p_clus  # cluster num of root dir * b_p_sec * sec_p_clus = byte offset of root dir
+        self.root_dir = int.from_bytes(self.fs_bytes[44:48], 'little') * self.b_p_sec * self.sec_p_clus
+        # cluster num of root dir * b_p_sec * sec_p_clus = byte offset of root dir
         self.pwd = self.root_dir  # set init pwd to root
 
     def info(self):
@@ -101,7 +102,7 @@ else:
     fs = FileSystem("fat32.img")
 
     while True:
-        full_command = (input(">")).split(" ")
+        full_command = (input("> ")).split(" ")
         command = full_command[0]
         if len(full_command) > 1:
             arg_list = full_command[1:]
