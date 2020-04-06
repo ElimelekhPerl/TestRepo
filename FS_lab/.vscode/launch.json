@@ -8,7 +8,7 @@
             "name": "Python: FS1",
             "type": "python",
             "request": "launch",
-            "program": "/mnt/c/CS/YU/OS/TestRepo/FS_lab/File_System.py",
+            "program": "/home/elimelekh/c/CompSci/MYGIT/TestRepo/FS_lab/File_System.py",
             "console": "integratedTerminal",
             "args": ["fat32.img"]
         }
