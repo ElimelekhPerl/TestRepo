@@ -139,6 +139,6 @@ else:
         else:
             continue
     fs.fs_file.close()
-    sys.exit()
+    sys.exit(0)
 
 
