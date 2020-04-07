@@ -9,15 +9,14 @@ import sys
 # utility functions
 class FileSystem:
     def __init__(self, img_file):
-        with open(img_file, 'rb+') as fs_file:  # You may NOT reuse kernel file system code
-            self.fs_bytes = fs_file.read()
+        fs_file = open(img_file, 'rb+')  # You may NOT reuse kernel file system code
 
-        self.b_p_sec = int.from_bytes(self.fs_bytes[11:13], 'little')
-        self.sec_p_clus = self.fs_bytes[13]
-        self.rsec_count = int.from_bytes(self.fs_bytes[14:16], 'little')
-        self.num_fats = self.fs_bytes[16]
-        self.sec_p_fat = int.from_bytes(self.fs_bytes[36:40], 'little')
-        self.root_dir = int.from_bytes(self.fs_bytes[44:48], 'little') * self.b_p_sec * self.sec_p_clus
+        self.b_p_sec = int.from_bytes(read_bytes(fs_file, 11, 13), 'little')
+        self.sec_p_clus = read_bytes(fs_file, 13, 14)
+        self.rsec_count = int.from_bytes(read_bytes(fs_file, 14, 16), 'little')
+        self.num_fats = read_bytes(fs_file, 16, 17)
+        self.sec_p_fat = int.from_bytes(read_bytes(fs_file, 36, 40), 'little')
+        self.root_dir = (int.from_bytes(read_bytes(fs_file, 44, 48), 'little') - 2) * self.b_p_sec * self.sec_p_clus
         # cluster num of root dir * b_p_sec * sec_p_clus = byte offset of root dir
         self.pwd = self.root_dir  # set init pwd to root
 
@@ -131,3 +130,7 @@ else:
             continue
 
 # helper functions
+def read_bytes(fd, start, end): # [start, end)
+    os.lseek(fd, start)
+    byte_string = fd.read(end-start)
+    return byte_string
