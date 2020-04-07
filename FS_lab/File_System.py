@@ -19,17 +19,17 @@ def read_bytes(fd, start, end):  # [start, end)
 
 class FileSystem:
     def __init__(self, img_file):
-        fs_file = open(img_file, 'rb+')  # You may NOT reuse kernel file system code
+        self.fs_file = open(img_file, 'rb+')  # You may NOT reuse kernel file system code
 
-        self.b_p_sec = int.from_bytes(read_bytes(fs_file, 11, 13), 'little')
-        self.sec_p_clus = read_bytes(fs_file, 13, 14)
-        self.rsec_count = int.from_bytes(read_bytes(fs_file, 14, 16), 'little')
-        self.num_fats = read_bytes(fs_file, 16, 17)
-        self.sec_p_fat = int.from_bytes(read_bytes(fs_file, 36, 40), 'little')
+        self.b_p_sec = int.from_bytes(read_bytes(self.fs_file, 11, 13), 'little')
+        self.sec_p_clus = int.from_bytes(read_bytes(self.fs_file, 13, 14), 'little')
+        self.rsec_count = int.from_bytes(read_bytes(self.fs_file, 14, 16), 'little')
+        self.num_fats = int.from_bytes(read_bytes(self.fs_file, 16, 17), 'little')
+        self.sec_p_fat = int.from_bytes(read_bytes(self.fs_file, 36, 40), 'little')
         # self.data_offset = 90 + self.rsec_count + (self.num_fats * self.sec_p_fat * 32)
         # self.root_dir = self.data_offset
         # cluster num of root dir * b_p_sec * sec_p_clus = byte offset of root dir
-        self.pwd = self.root_dir  # set init pwd to root
+        # self.pwd = self.root_dir  # set init pwd to root
 
     def info(self):
         fields = ["BPB_BytesPerSec", "BPB_SecPerClus", "BPB_RsvdSecCnt", "BPB_NumFATS", "BPB_FATSz32"]
@@ -110,7 +110,6 @@ if argv[1] != "fat32.img":
 else:
     fs = FileSystem("fat32.img")
 
-    quit = False
     while True:
         full_command = (input("> ")).split(" ")
         command = full_command[0]
@@ -136,12 +135,10 @@ else:
         elif command == "rmdir":
             fs.rmdir(arg_list)
         elif command == "quit":
-            quit = True
+            break
         else:
             continue
-        if quit:
-            break
-    fs.close()
-    exit()
+    fs.fs_file.close()
+    sys.exit()
 
 
