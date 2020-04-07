@@ -9,3 +9,5 @@ serverProj/index.html
 serverProj/test.txt
 serverProj/zubat.jpg
 serverProj/nweb.log
+*.img
+*.json
