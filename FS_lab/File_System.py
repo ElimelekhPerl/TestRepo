@@ -4,6 +4,7 @@
 # Zechariah Rosenthal <zresont1@mail.yu.edu, UID 800449055>
 
 import sys
+import os
 
 
 # utility functions
@@ -16,7 +17,8 @@ class FileSystem:
         self.rsec_count = int.from_bytes(read_bytes(fs_file, 14, 16), 'little')
         self.num_fats = read_bytes(fs_file, 16, 17)
         self.sec_p_fat = int.from_bytes(read_bytes(fs_file, 36, 40), 'little')
-        self.root_dir = (int.from_bytes(read_bytes(fs_file, 44, 48), 'little') - 2) * self.b_p_sec * self.sec_p_clus
+        self.data_offset = 90 + self.num_fats * sec_p_fat
+        self.root_dir = 
         # cluster num of root dir * b_p_sec * sec_p_clus = byte offset of root dir
         self.pwd = self.root_dir  # set init pwd to root
 
@@ -86,8 +88,6 @@ class FileSystem:
         out!
         """
 
-    def quit(self):
-        """quit the utility"""
 
 
 # main routine
@@ -100,6 +100,7 @@ if argv[1] != "fat32.img":
 else:
     fs = FileSystem("fat32.img")
 
+    quit = False
     while True:
         full_command = (input("> ")).split(" ")
         command = full_command[0]
@@ -125,12 +126,18 @@ else:
         elif command == "rmdir":
             fs.rmdir(arg_list)
         elif command == "quit":
-            fs.quit()
+            fs.close()
+            quit = True
         else:
             continue
+        
+        if quit:
+            exit()
 
 # helper functions
-def read_bytes(fd, start, end): # [start, end)
+
+
+def read_bytes(fd, start, end):  # [start, end)
     os.lseek(fd, start)
-    byte_string = fd.read(end-start)
+    byte_string = fd.read(end - start)
     return byte_string
