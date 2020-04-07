@@ -4,32 +4,36 @@
 # Zechariah Rosenthal <zresont1@mail.yu.edu, UID 800449055>
 
 import sys
-import os
-
-# helper functions
-
-
-def read_bytes(fd, start, end):  # [start, end)
-    fd.seek(start)
-    byte_string = fd.read(end - start)
-    return byte_string
-
-# utility functions
 
 
 class FileSystem:
-    def __init__(self, img_file):
-        self.fs_file = open(img_file, 'rb+')  # You may NOT reuse kernel file system code
 
-        self.b_p_sec = int.from_bytes(read_bytes(self.fs_file, 11, 13), 'little')
-        self.sec_p_clus = int.from_bytes(read_bytes(self.fs_file, 13, 14), 'little')
-        self.rsec_count = int.from_bytes(read_bytes(self.fs_file, 14, 16), 'little')
-        self.num_fats = int.from_bytes(read_bytes(self.fs_file, 16, 17), 'little')
-        self.sec_p_fat = int.from_bytes(read_bytes(self.fs_file, 36, 40), 'little')
-        # self.data_offset = 90 + self.rsec_count + (self.num_fats * self.sec_p_fat * 32)
-        # self.root_dir = self.data_offset
-        # cluster num of root dir * b_p_sec * sec_p_clus = byte offset of root dir
-        # self.pwd = self.root_dir  # set init pwd to root
+    # helper functions
+
+    def read_bytes(self, start, end):  # [start, end)
+        self.fs_file.seek(start)
+        byte_string = self.fs_file.read(end - start)
+        return byte_string
+
+    def clus_to_offset(self, clus_num):
+        data_offset = ((clus_num - 2) * self.sec_p_clus * self. b_p_sec)  # negate clus_num off-by-2, multiply in sec_p_clus and b_p_sec
+        return data_offset + self.pre_data_offset  # return absolute offset by adding size of meta-data (boot + FATs) to offset within data
+
+    # constructor
+
+    def __init__(self, img_file):
+        self.fs_file = open(img_file, 'rb+')
+
+        self.b_p_sec = int.from_bytes(self.read_bytes(11, 13), 'little')
+        self.sec_p_clus = int.from_bytes(self.read_bytes(13, 14), 'little')
+        self.rsec_count = int.from_bytes(self.read_bytes(14, 16), 'little')
+        self.num_fats = int.from_bytes(self.read_bytes(16, 17), 'little')
+        self.sec_p_fat = int.from_bytes(self.read_bytes(36, 40), 'little')
+        self.pre_data_offset = (self.rsec_count * self.b_p_sec) + (self.num_fats * self.sec_p_fat * self.b_p_sec)  # reserved sectors + FATs
+        self.root_dir = self.clus_to_offset(int.from_bytes(self.read_bytes(44, 48), 'little'))
+        self.pwd = self.root_dir  # set init pwd to root
+
+    # utility functions
 
     def info(self):
         fields = ["BPB_BytesPerSec", "BPB_SecPerClus", "BPB_RsvdSecCnt", "BPB_NumFATS", "BPB_FATSz32"]
@@ -140,5 +144,3 @@ else:
             continue
     fs.fs_file.close()
     sys.exit(0)
-
-
