@@ -6,8 +6,17 @@
 import sys
 import os
 
+# helper functions
+
+
+def read_bytes(fd, start, end):  # [start, end)
+    fd.seek(start)
+    byte_string = fd.read(end - start)
+    return byte_string
 
 # utility functions
+
+
 class FileSystem:
     def __init__(self, img_file):
         fs_file = open(img_file, 'rb+')  # You may NOT reuse kernel file system code
@@ -17,8 +26,8 @@ class FileSystem:
         self.rsec_count = int.from_bytes(read_bytes(fs_file, 14, 16), 'little')
         self.num_fats = read_bytes(fs_file, 16, 17)
         self.sec_p_fat = int.from_bytes(read_bytes(fs_file, 36, 40), 'little')
-        self.data_offset = 90 + self.num_fats * sec_p_fat
-        self.root_dir = 
+        # self.data_offset = 90 + self.rsec_count + (self.num_fats * self.sec_p_fat * 32)
+        # self.root_dir = self.data_offset
         # cluster num of root dir * b_p_sec * sec_p_clus = byte offset of root dir
         self.pwd = self.root_dir  # set init pwd to root
 
@@ -89,8 +98,9 @@ class FileSystem:
         """
 
 
-
 # main routine
+
+
 argv = sys.argv
 
 if argv[1] != "fat32.img":
@@ -126,18 +136,12 @@ else:
         elif command == "rmdir":
             fs.rmdir(arg_list)
         elif command == "quit":
-            fs.close()
             quit = True
         else:
             continue
-        
         if quit:
-            exit()
+            break
+    fs.close()
+    exit()
 
-# helper functions
 
-
-def read_bytes(fd, start, end):  # [start, end)
-    os.lseek(fd, start)
-    byte_string = fd.read(end - start)
-    return byte_string
