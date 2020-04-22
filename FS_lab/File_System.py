@@ -30,22 +30,25 @@ class FileSystem:
             return "ATTR_VOLUME_ID"
         elif attr == 16:
             return "ATTR_DIRECTORY"
-        elif attr = 32:
+        elif attr == 32:
             return "ATTR_ARCHIVE"
 
-    def dir_contents(self):  # returns dictionary of files:info for PWD
-        cur_offset = self.pwd  # change to offset of subsequent clus_num according to FAT if necessary
-        contents = []
+    def dir_contents(self, dir_offset):  # returns dictionary of files:info for PWD
+        cur_offset = dir_offset  # change to offset of subsequent clus_num according to FAT if necessary
+        contents = dict()
 
         while int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 0:  # haven't reached end of dir marker
             attr = int.from_bytes(self.read_bytes(cur_offset + 11, cur_offset + 12), 'little')
             if attr != 15:  # short name entry
                 if int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 229:  # not a free entry
-                    name = strip(self.read_bytes(cur_offset, cur_offset + 9).decode())  # decode name with utf-8 from bytes, strip whitespace
-                    ext = strip(self.read_bytes(cur_offset + 9, cur_offset + 12).decode())  # ditto for ext
-                    full_name = name + "." + ext  # concat name, period, and ext for full name
-
                     attr = self.parse_attr(attr)  # use helper func to return ATTR string corresponding to attr number
+                    
+                    name = (self.read_bytes(cur_offset, cur_offset + 8).decode()).strip()  # decode name with utf-8 from bytes, strip whitespace
+                    if attr == "ATTR_DIRECTORY":
+                        full_name = name + "/"  # if dir, concat '/'
+                    else:
+                        ext = (self.read_bytes(cur_offset + 8, cur_offset + 11).decode()).strip()  # ditto for ext
+                        full_name = name + "." + ext  # if file, concat name, period, and ext for full name
 
                     hi_clus_bytes = int.from_bytes(self.read_bytes(cur_offset + 20, cur_offset + 22), 'little')
                     lo_clus_bytes = int.from_bytes(self.read_bytes(cur_offset + 26, cur_offset + 28), 'little')
@@ -54,12 +57,12 @@ class FileSystem:
                     if attr == "ATTR_DIRECTORY":
                         size = 0
                     else:
-                        size = int.from_bytes(self.read_bytes(28, 32), )'little')
+                        size = int.from_bytes(self.read_bytes(28, 32), 'little')
 
-                    contents.append(full_name: (attr, clus_num, size))  # add dictionary entry to contents, with file name as key, list of meta-data as value
+                    contents[str(full_name)] = {'attr': attr, 'clus_num': clus_num, 'size': size}  # add dictionary entry to contents, with file name as key, list of meta-data as value
 
             cur_offset = cur_offset + 32  # advance to next dir entry
-            if cur_offset == self.pwd + (self.sec_p_clus + self.b_p_sec):  # reached end of current cluster, check FAT
+            if cur_offset == self.pwd_offset + (self.sec_p_clus + self.b_p_sec):  # reached end of current cluster, check FAT
                 FAT_offset = (self.rsec_count * self.b_p_sec()) + (self.pwd_clus * 4)  # reserved sectors + preceding FAT entries
                 FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
@@ -82,7 +85,8 @@ class FileSystem:
         self.eoc_marker = int.from_bytes(self.read_bytes(self.rsec_count * self.b_p_sec + 4, self.rsec_count * self.b_p_sec + 8), 'little')
         self.pre_data_offset = (self.rsec_count * self.b_p_sec) + (self.num_fats * self.sec_p_fat * self.b_p_sec)  # reserved sectors + FATs
         self.root_dir = self.clus_to_offset(int.from_bytes(self.read_bytes(44, 48), 'little'))
-        self.pwd = self.root_dir  # set init pwd to root
+        self.pwd_name = "i_am_root"
+        self.pwd_offset = self.root_dir  # set init pwd to root
         self.pwd_clus = int.from_bytes(self.read_bytes(44, 48), 'little')
 
     # utility functions
@@ -98,12 +102,16 @@ class FileSystem:
         print('        %s %7s %8d' % (fields[4].ljust(15), hex(self.sec_p_fat), self.sec_p_fat))
 
     def stat(self, param):
-        """
-        Description: prints the sizeof the file or directory name, the attributes of the file or
-        directory name, and the first cluster number of the file or directory name if it is in
-        the present working directory.  Return an error if FILE_NAME/DIR_NAME does ot exist. (Note:
-        The size of a directory will always be zero.)
-         """
+        file_name = param[0]
+        contents = self.dir_contents(self.pwd_offset)
+
+        if file_name in contents:
+            print("size: " + str(contents[file_name]["size"]))
+            print("attr: " + str(contents[file_name]["attr"]))
+            print("starting cluster: " + str(contents[file_name]["clus_num"]))
+
+        else:
+            print(str(file_name) + " not found")
 
     def size(self, param):
         """
@@ -119,9 +127,17 @@ class FileSystem:
         """
 
     def ls(self, param):
-        """
-        Description: lists the contents of DIR_NAME, including “.” and “..”.
-        """
+        dir_name = param[0]
+        if str(dir_name) == "root" and self.pwd_name == "i_am_root":  # root has no . dir, so this is only way to list its own contents
+            for file in self.dir_contents(self.pwd_offset):
+                print(str(file))
+        else:
+            pwd_contents = self.dir_contents(self.pwd_offset)
+            if repr(param) in pwd_contents:
+                for file in self.dir_contents(self.clus_to_offset(pwd_contents[repr(dir_name)]["clus_num"])):
+                    print(str(file))
+            else:
+                print("dir " + str(dir_name) + " not found")
 
     def read_file(self, param):
         """
@@ -167,7 +183,7 @@ else:
     fs = FileSystem("fat32.img")
 
     while True:
-        full_command = (input("> ")).split(" ")
+        full_command = (input(str(fs.pwd_name) + "/ > ")).split(" ")
         command = full_command[0]
         if len(full_command) > 1:
             arg_list = full_command[1:]
