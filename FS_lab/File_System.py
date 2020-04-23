@@ -60,7 +60,7 @@ class FileSystem:
                     
                     name = (self.read_bytes(cur_offset, cur_offset + 8).decode()).strip()  # decode name with utf-8 from bytes, strip whitespace
                     if attr == "ATTR_DIRECTORY":
-                        full_name = name + "/"  # if dir, concat '/'
+                        full_name = name  # if dir, concat '/'
                     else:
                         ext = (self.read_bytes(cur_offset + 8, cur_offset + 11).decode()).strip()  # ditto for ext
                         full_name = name + "." + ext  # if file, concat name, period, and ext for full name
