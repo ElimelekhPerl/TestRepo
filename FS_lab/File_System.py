@@ -1,7 +1,7 @@
 # FAT32 File System Utility
 
 # Eli Perl <eperl@mail.yu.edu, UID 800431807>
-# Zechariah Rosenthal <zresont1@mail.yu.edu, UID 800449055>
+# Zechariah Rosenthal <zrosent1@mail.yu.edu, UID 800449055>
 
 import sys
 
@@ -11,11 +11,21 @@ class FileSystem:
     # helper functions
 
     def read_bytes(self, start, end):  # [start, end)
+        """ 
+        Returns literal byte_string from [start, end). 
+        @Param start, end: the absolute byte offset within the img 
+        """
+        
         self.fs_file.seek(start)
         byte_string = self.fs_file.read(end - start)
         return byte_string
 
     def clus_to_offset(self, clus_num):
+        """ 
+        Returns absolute byte offset in img given cluster number. 
+        @Param clus_num: the cluster number within the img 
+        """
+        
         data_offset = ((clus_num - 2) * self.sec_p_clus * self. b_p_sec)  # negate clus_num off-by-2, multiply in sec_p_clus and b_p_sec
         return data_offset + self.pre_data_offset  # return absolute offset by adding size of meta-data (boot + FATs) to offset within data
 
@@ -33,7 +43,12 @@ class FileSystem:
         elif attr == 32:
             return "ATTR_ARCHIVE"
 
-    def dir_contents(self, dir_offset):  # returns dictionary of files:info for PWD
+    def dir_contents(self, dir_offset):  
+        """ 
+        returns dictionary of files:info for DIR. 
+        @Param dir_offset: the absolute byte offset for DIR 
+        """
+        
         cur_offset = dir_offset  # change to offset of subsequent clus_num according to FAT if necessary
         contents = dict()
 
@@ -57,12 +72,12 @@ class FileSystem:
                     if attr == "ATTR_DIRECTORY":
                         size = 0
                     else:
-                        size = int.from_bytes(self.read_bytes(28, 32), 'little')
+                        size = int.from_bytes(self.read_bytes(cur_offset + 28, cur_offset + 32), 'little')
 
                     contents[str(full_name)] = {'attr': attr, 'clus_num': clus_num, 'size': size}  # add dictionary entry to contents, with file name as key, list of meta-data as value
 
             cur_offset = cur_offset + 32  # advance to next dir entry
-            if cur_offset == self.pwd_offset + (self.sec_p_clus + self.b_p_sec):  # reached end of current cluster, check FAT
+            if cur_offset == dir_offset + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
                 FAT_offset = (self.rsec_count * self.b_p_sec()) + (self.pwd_clus * 4)  # reserved sectors + preceding FAT entries
                 FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
@@ -92,6 +107,11 @@ class FileSystem:
     # utility functions
 
     def info(self):
+        """ 
+        Prints out information about the following fields in both hex and base 10: 
+        BPB_BytesPerSec, BPB_SecPerClus, BPB_RsvdSecCnt, BPB_NumFATS, BPB_FATSz32 
+        """
+        
         fields = ["BPB_BytesPerSec", "BPB_SecPerClus", "BPB_RsvdSecCnt", "BPB_NumFATS", "BPB_FATSz32"]
 
         print("info:   field              hex       dec")
@@ -102,9 +122,18 @@ class FileSystem:
         print('        %s %7s %8d' % (fields[4].ljust(15), hex(self.sec_p_fat), self.sec_p_fat))
 
     def stat(self, param):
+        """ 
+        Prints the sizeof the file or directory name, the attributes of the file or directory name, 
+        and the first cluster number of the file or directory name if it is in the present working directory. 
+        Return an error if FILE_NAME/DIR_NAME does not exist. (Note: The size of a directory will always be zero.) 
+        """
+        
         file_name = param[0]
+        if file_name == "": # is this how to do string equals in python ?
+            print("Usage: stat [FILE_NAME/DIR_NAME]")
+            return
+        
         contents = self.dir_contents(self.pwd_offset)
-
         if file_name in contents:
             print("size: " + str(contents[file_name]["size"]))
             print("attr: " + str(contents[file_name]["attr"]))
@@ -115,46 +144,54 @@ class FileSystem:
 
     def size(self, param):
         """
-        Description: prints the size of file FILE_NAME in the present working directory. Log an
+        Prints the size of file FILE_NAME in the present working directory. Log an
         error if FILE_NAME does not exist.
         """
 
     def cd(self, param):
         """
-        Description: changes the present working directory to DIR_NAME.  Log an error if the directory
+        Changes the present working directory to DIR_NAME.  Log an error if the directory
         does not exist.   DIR_NAME may be “.” (here) and “..” (up one directory).  You don't have to
         handle a path longer than one directory.
         """
 
     def ls(self, param):
+        """ 
+        Lists the contents of DIR_NAME, including “.” and “..”
+        @Param param: valid DIR_NAME within PWD 
+        """
+        
         dir_name = param[0]
-        if str(dir_name) == "root" and self.pwd_name == "i_am_root":  # root has no . dir, so this is only way to list its own contents
+        if dir_name == "":  # is this how to do string equals in python ?
+            dir_name = "."
+        
+        if dir_name == ".":  # root has no . dir, so this is only way to list its own contents
             for file in self.dir_contents(self.pwd_offset):
                 print(str(file))
         else:
             pwd_contents = self.dir_contents(self.pwd_offset)
-            if repr(param) in pwd_contents:
-                for file in self.dir_contents(self.clus_to_offset(pwd_contents[repr(dir_name)]["clus_num"])):
+            if dir_name in pwd_contents:
+                for file in self.dir_contents(self.clus_to_offset(pwd_contents[dir_name]["clus_num"])):
                     print(str(file))
             else:
                 print("dir " + str(dir_name) + " not found")
 
     def read_file(self, param):
         """
-        Description: reads from a file named FILE_NAME, starting at POSITION, and prints NUM_BYTES.
+        Reads from a file named FILE_NAME, starting at POSITION, and prints NUM_BYTES.
         Return an error when trying to read an unopened file.
         """
 
     def volume(self):
         """
-        Description: Prints the volume name of the file system image.  If there is a volume name it
+        Prints the volume name of the file system image.  If there is a volume name it
         will be found in the root directory.  If there is no volume name, print “Error: volume name
         not found.”
         """
 
     def mkdir(self, param):
         """
-        Description: make a new subdirectory in the current directory.  This may require the allocation
+        Make a new subdirectory in the current directory.  This may require the allocation
         of additional space if the current directory has all entries full in all sectors. It is acceptable
         for you to only add the subdirectory if there is space to do so without allocating an additional
         sector.  If you are unable to create the subdirectory for any reason, you must print an error
@@ -163,7 +200,7 @@ class FileSystem:
 
     def rmdir(self, param):
         """
-        Description: delete a subdirectory in the current directory, but only if it is empty!  If you
+        Delete a subdirectory in the current directory, but only if it is empty!  If you
         are unable to delete the subdirectory for any reason, you must print an error message on stderr
         (fd 2).  Follow the FAT32 rules for deleting stuff; do not do a full overwrite or zero anything
         out!
@@ -186,12 +223,14 @@ else:
         full_command = (input(str(fs.pwd_name) + "/ > ")).split(" ")
         command = full_command[0]
         if len(full_command) > 1:
-            arg_list = full_command[1:]
+            arg_list = full_command[1:] #To fix: make all args of input automatically CAPS
+        else:
+            arg_list = [""]
 
         if command == "info":
             fs.info()
         elif command == "stat":
-            fs.stat(arg_list)  # need to error-check for bad input (ie too many args)
+            fs.stat(arg_list)
         elif command == "size":
             fs.size(arg_list)
         elif command == "cd":
