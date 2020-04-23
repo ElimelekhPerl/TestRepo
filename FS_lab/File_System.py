@@ -78,7 +78,7 @@ class FileSystem:
 
             cur_offset = cur_offset + 32  # advance to next dir entry
             if cur_offset == dir_offset + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
-                FAT_offset = (self.rsec_count * self.b_p_sec()) + (self.pwd_clus * 4)  # reserved sectors + preceding FAT entries
+                FAT_offset = (self.rsec_count * self.b_p_sec) + (self.pwd_clus * 4)  # reserved sectors + preceding FAT entries
                 FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
                     cur_offset == self.clus_to_offset(FAT_entry)  # set offset to beginning of next data cluster
@@ -129,7 +129,7 @@ class FileSystem:
         """
         
         file_name = param[0]
-        if file_name == "": # is this how to do string equals in python ?
+        if file_name == "":  # is this how to do string equals in python ?
             print("Usage: stat [FILE_NAME/DIR_NAME]")
             return
         
@@ -223,7 +223,7 @@ else:
         full_command = (input(str(fs.pwd_name) + "/ > ")).split(" ")
         command = full_command[0]
         if len(full_command) > 1:
-            arg_list = full_command[1:] #To fix: make all args of input automatically CAPS
+            arg_list = full_command[1:]  #To fix: make all args of input automatically CAPS
         else:
             arg_list = [""]
 
