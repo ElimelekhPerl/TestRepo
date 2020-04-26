@@ -231,8 +231,8 @@ class FileSystem:
                     cur_offset = self.clus_to_offset(cur_clus)
                     output = output + self.read_bytes(cur_offset, cur_offset + partial_sec_size).decode()
                 
-                print(output)
-                print("NUM_BYTES: " + str(size))
+            print(output)
+            print("NUM_BYTES: " + str(size))
 
         else:
             print(str(file_name) + " not found")
