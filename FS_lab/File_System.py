@@ -103,7 +103,6 @@ class FileSystem:
         self.root_clus = int.from_bytes(self.read_bytes(44, 48), 'little')
         self.root_dir = self.clus_to_offset(self.root_clus)
         self.pwd_clus = self.root_clus
-        self.pwd_offset = self.root_dir  # set init pwd to root
         self.pwd_name = "i_am_root"
 
     # utility functions
@@ -168,6 +167,22 @@ class FileSystem:
         does not exist.   DIR_NAME may be “.” (here) and “..” (up one directory).  You don't have to
         handle a path longer than one directory.
         """
+        dir_name = param[0]
+        if dir_name == "":  
+            print("Usage: cd [DIR_NAME]")
+            return 
+        contents = self.dir_contents(self.pwd_clus)
+        if dir_name in contents and (contents[dir_name]["attr"] == "ATTR_DIRECTORY"):
+            self.pwd_clus = contents[dir_name]["clus_num"]
+            if self.pwd_clus == 0:
+                self.pwd_clus = self.root_clus
+            if dir_name != ".":
+                if dir_name == "..":
+                    self.pwd_name = self.pwd_name[:self.pwd_name.rfind("/")]
+                else:
+                    self.pwd_name = self.pwd_name + "/" + dir_name
+        else:
+            print("Directory " + dir_name + " not found in present working directory")
 
     def ls(self, param):
         """ 
@@ -186,7 +201,7 @@ class FileSystem:
                 contents.append(str(file_name))
         else:
             pwd_contents = self.dir_contents(self.pwd_clus)
-            if dir_name in pwd_contents:
+            if dir_name in pwd_contents and (pwd_contents[dir_name]["attr"] == "ATTR_DIRECTORY"):
                 for file_name in self.dir_contents(pwd_contents[dir_name]["clus_num"]):
                     contents.append(str(file_name))
             else:
