@@ -202,14 +202,25 @@ class FileSystem:
         """
         
         file_name = param[0]
+        
         if file_name == "":
             print("Usage: read [FILE_NAME] <Start_Position> <Num_Bytes>")
             return
         
         contents = self.dir_contents(self.pwd_clus)
         if file_name in contents:
+            if len(param) == 1:
+                offset = 0
+                num_bytes = contents[file_name]["size"]
+            elif len(param) == 3:
+                offset = int(param[1])
+                if int(param[2]) + offset <= contents[file_name]["size"]:
+                    num_bytes = int(param[2])
+                    size = num_bytes + offset
+                else:
+                    size = num_bytes = contents[file_name]["size"]
+
             cur_clus = contents[file_name]["clus_num"]
-            size = contents[file_name]["size"]
             clus_size = self.b_p_sec * self.sec_p_clus
             output = ""
 
@@ -230,9 +241,8 @@ class FileSystem:
                     cur_offset = self.clus_to_offset(cur_clus)
                     output = output + self.read_bytes(cur_offset, cur_offset + partial_sec_size).decode()
                 
-            print(output)
-            print("NUM_BYTES: " + str(size))
-
+            print(output[offset:])
+            
         else:
             print(str(file_name) + " not found")
 
