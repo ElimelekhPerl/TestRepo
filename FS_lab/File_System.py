@@ -43,13 +43,13 @@ class FileSystem:
         elif attr == 32:
             return "ATTR_ARCHIVE"
 
-    def dir_contents(self, clus_num):  
+    def dir_contents(self, cur_clus):  
         """ 
         returns dictionary of files:info for DIR. 
         @Param dir_offset: the absolute byte offset for DIR 
         """
         
-        cur_offset = self.clus_to_offset(clus_num)  # change to offset of subsequent clus_num according to FAT if necessary
+        cur_offset = self.clus_to_offset(cur_clus)  # change to offset of subsequent clus_num according to FAT if necessary
         contents = dict()
 
         while int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 0:  # haven't reached end of dir marker
@@ -78,7 +78,7 @@ class FileSystem:
 
             cur_offset = cur_offset + 32  # advance to next dir entry
             if cur_offset == self.clus_to_offset(clus_num) + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
-                FAT_offset = (self.rsec_count * self.b_p_sec) + (clus_num * 4)  # reserved sectors + preceding FAT entries
+                FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
                 FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
                     cur_offset == self.clus_to_offset(FAT_entry)  # set offset to beginning of next data cluster
@@ -99,10 +99,11 @@ class FileSystem:
         self.sec_p_fat = int.from_bytes(self.read_bytes(36, 40), 'little')
         self.eoc_marker = int.from_bytes(self.read_bytes(self.rsec_count * self.b_p_sec + 4, self.rsec_count * self.b_p_sec + 8), 'little')
         self.pre_data_offset = (self.rsec_count * self.b_p_sec) + (self.num_fats * self.sec_p_fat * self.b_p_sec)  # reserved sectors + FATs
-        self.root_dir = self.clus_to_offset(int.from_bytes(self.read_bytes(44, 48), 'little'))
-        self.pwd_name = "i_am_root"
+        self.root_clus = int.from_bytes(self.read_bytes(44, 48), 'little')
+        self.root_dir = self.clus_to_offset(self.root_clus)
+        self.pwd_clus = self.root_clus
         self.pwd_offset = self.root_dir  # set init pwd to root
-        self.pwd_clus = int.from_bytes(self.read_bytes(44, 48), 'little')
+        self.pwd_name = "i_am_root"
 
     # utility functions
 
