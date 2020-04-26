@@ -152,7 +152,7 @@ class FileSystem:
 
         file_name = param[0]
         if file_name == "":  # is this how to do string equals in python ?
-            print("Usage: stat [FILE_NAME/DIR_NAME]")
+            print("Usage: size [FILE_NAME/DIR_NAME]")
             return
         
         contents = self.dir_contents(self.pwd_clus)
@@ -201,6 +201,41 @@ class FileSystem:
         Reads from a file named FILE_NAME, starting at POSITION, and prints NUM_BYTES.
         Return an error when trying to read an unopened file.
         """
+        
+        file_name = param[0]
+        if file_name == "":  # is this how to do string equals in python ?
+            print("Usage: read [FILE_NAME]")
+            return
+        
+        contents = self.dir_contents(self.pwd_clus)
+        if file_name in contents:
+            cur_clus = contents[file_name]["clus_num"]
+            size = contents[file_name]["size"]
+            clus_size = self.b_p_sec * self.sec_p_clus
+            output = ""
+
+            if size <= clus_size:  # only takes up one cluster
+                cur_offset = self.clus_to_offset(cur_clus)
+                output = self.read_bytes(cur_offset, cur_offset + size).decode()
+            else:
+                full_secs = size // clus_size
+                partial_sec_size = size % clus_size
+
+                for i in range(0, full_secs):
+                    cur_offset = self.clus_to_offset(cur_clus)
+                    output = output + self.read_bytes(cur_offset, cur_offset + clus_size).decode()
+                    FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
+                    cur_clus = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
+                
+                if partial_sec_size != 0:
+                    cur_offset = self.clus_to_offset(cur_clus)
+                    output = output + self.read_bytes(cur_offset, cur_offset + partial_sec_size).decode()
+                
+                print(output)
+                print("NUM_BYTES: " + str(size))
+
+        else:
+            print(str(file_name) + " not found")
 
     def volume(self):
         """
