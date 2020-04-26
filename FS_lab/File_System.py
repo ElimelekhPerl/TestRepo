@@ -77,11 +77,12 @@ class FileSystem:
                     contents[str(full_name)] = {'attr': attr, 'clus_num': clus_num, 'size': size}  # add dictionary entry to contents, with file name as key, list of meta-data as value
 
             cur_offset = cur_offset + 32  # advance to next dir entry
-            if cur_offset == self.clus_to_offset(clus_num) + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
+            if cur_offset == self.clus_to_offset(cur_clus) + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
                 FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
                 FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
-                    cur_offset == self.clus_to_offset(FAT_entry)  # set offset to beginning of next data cluster
+                    cur_clus = FAT_entry
+                    cur_offset = self.clus_to_offset(cur_clus)  # set offset to beginning of next data cluster
                 else:  # eoc reached
                     break
 
@@ -224,7 +225,7 @@ else:
         full_command = (input(str(fs.pwd_name) + "/ > ")).split(" ")
         command = full_command[0]
         if len(full_command) > 1:
-            arg_list = full_command[1:]  #To fix: make all args of input automatically CAPS
+            arg_list = full_command[1:]  # To fix: make all args of input automatically CAPS
         else:
             arg_list = [""]
 
