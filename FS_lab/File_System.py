@@ -46,10 +46,10 @@ class FileSystem:
     def dir_contents(self, cur_clus):  
         """ 
         returns dictionary of files:info for DIR. 
-        @Param dir_offset: the absolute byte offset for DIR 
+        @Param cur_clus: the cluster number of DIR 
         """
         
-        cur_offset = self.clus_to_offset(cur_clus)  # change to offset of subsequent clus_num according to FAT if necessary
+        cur_offset = self.clus_to_offset(cur_clus)
         contents = dict()
 
         while int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 0:  # haven't reached end of dir marker
@@ -60,7 +60,7 @@ class FileSystem:
                     
                     name = (self.read_bytes(cur_offset, cur_offset + 8).decode()).strip()  # decode name with utf-8 from bytes, strip whitespace
                     if attr == "ATTR_DIRECTORY":
-                        full_name = name  # if dir, concat '/'
+                        full_name = name
                     else:
                         ext = (self.read_bytes(cur_offset + 8, cur_offset + 11).decode()).strip()  # ditto for ext
                         full_name = name + "." + ext  # if file, concat name, period, and ext for full name
@@ -131,7 +131,7 @@ class FileSystem:
         """
         
         file_name = param[0]
-        if file_name == "":  # is this how to do string equals in python ?
+        if file_name == "":  
             print("Usage: stat [FILE_NAME/DIR_NAME]")
             return
         
@@ -151,7 +151,7 @@ class FileSystem:
         """
 
         file_name = param[0]
-        if file_name == "":  # is this how to do string equals in python ?
+        if file_name == "":
             print("Usage: size [FILE_NAME/DIR_NAME]")
             return
         
@@ -178,17 +178,17 @@ class FileSystem:
         dir_name = param[0]
         contents = []
 
-        if dir_name == "":  # is this how to do string equals in python ?
+        if dir_name == "":
             dir_name = "."
         
         if dir_name == ".":  # root has no . dir, so this is only way to list its own contents
-            for file in self.dir_contents(self.pwd_clus):
-                contents.append(str(file))
+            for file_name in self.dir_contents(self.pwd_clus):
+                contents.append(str(file_name))
         else:
             pwd_contents = self.dir_contents(self.pwd_clus)
             if dir_name in pwd_contents:
-                for file in self.dir_contents(pwd_contents[dir_name]["clus_num"]):
-                    contents.append(str(file))
+                for file_name in self.dir_contents(pwd_contents[dir_name]["clus_num"]):
+                    contents.append(str(file_name))
             else:
                 contents.append("dir " + str(dir_name) + " not found")
 
@@ -199,12 +199,11 @@ class FileSystem:
     def read_file(self, param):
         """
         Reads from a file named FILE_NAME, starting at POSITION, and prints NUM_BYTES.
-        Return an error when trying to read an unopened file.
         """
         
         file_name = param[0]
-        if file_name == "":  # is this how to do string equals in python ?
-            print("Usage: read [FILE_NAME]")
+        if file_name == "":
+            print("Usage: read [FILE_NAME] <Start_Position> <Num_Bytes>")
             return
         
         contents = self.dir_contents(self.pwd_clus)
@@ -278,7 +277,7 @@ else:
         full_command = (input(str(fs.pwd_name) + "/ > ")).split(" ")
         command = full_command[0]
         if len(full_command) > 1:
-            arg_list = full_command[1:]  # To fix: make all args of input automatically CAPS
+            arg_list = [arg.upper() for arg in full_command[1:]]
         else:
             arg_list = [""]
 
