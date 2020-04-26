@@ -135,7 +135,7 @@ class FileSystem:
             print("Usage: stat [FILE_NAME/DIR_NAME]")
             return
         
-        contents = self.dir_contents(self.pwd_offset)
+        contents = self.dir_contents(self.pwd_clus)
         if file_name in contents:
             print("size: " + str(contents[file_name]["size"]))
             print("attr: " + str(contents[file_name]["attr"]))
@@ -149,6 +149,18 @@ class FileSystem:
         Prints the size of file FILE_NAME in the present working directory. Log an
         error if FILE_NAME does not exist.
         """
+
+        file_name = param[0]
+        if file_name == "":  # is this how to do string equals in python ?
+            print("Usage: stat [FILE_NAME/DIR_NAME]")
+            return
+        
+        contents = self.dir_contents(self.pwd_clus)
+        if file_name in contents:
+            print("size: " + str(contents[file_name]["size"]))
+
+        else:
+            print(str(file_name) + " not found")
 
     def cd(self, param):
         """
