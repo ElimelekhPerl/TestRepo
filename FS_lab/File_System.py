@@ -164,19 +164,25 @@ class FileSystem:
         """
         
         dir_name = param[0]
+        contents = []
+
         if dir_name == "":  # is this how to do string equals in python ?
             dir_name = "."
         
         if dir_name == ".":  # root has no . dir, so this is only way to list its own contents
             for file in self.dir_contents(self.pwd_clus):
-                print(str(file))
+                contents.append(str(file))
         else:
             pwd_contents = self.dir_contents(self.pwd_clus)
             if dir_name in pwd_contents:
                 for file in self.dir_contents(pwd_contents[dir_name]["clus_num"]):
-                    print(str(file))
+                    contents.append(str(file))
             else:
-                print("dir " + str(dir_name) + " not found")
+                contents.append("dir " + str(dir_name) + " not found")
+
+        contents.sort()
+        for string in contents:
+            print(string)
 
     def read_file(self, param):
         """
