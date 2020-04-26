@@ -43,13 +43,13 @@ class FileSystem:
         elif attr == 32:
             return "ATTR_ARCHIVE"
 
-    def dir_contents(self, dir_offset):  
+    def dir_contents(self, clus_num):  
         """ 
         returns dictionary of files:info for DIR. 
         @Param dir_offset: the absolute byte offset for DIR 
         """
         
-        cur_offset = dir_offset  # change to offset of subsequent clus_num according to FAT if necessary
+        cur_offset = self.clus_to_offset(clus_num)  # change to offset of subsequent clus_num according to FAT if necessary
         contents = dict()
 
         while int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 0:  # haven't reached end of dir marker
@@ -77,8 +77,8 @@ class FileSystem:
                     contents[str(full_name)] = {'attr': attr, 'clus_num': clus_num, 'size': size}  # add dictionary entry to contents, with file name as key, list of meta-data as value
 
             cur_offset = cur_offset + 32  # advance to next dir entry
-            if cur_offset == dir_offset + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
-                FAT_offset = (self.rsec_count * self.b_p_sec) + (self.pwd_clus * 4)  # reserved sectors + preceding FAT entries
+            if cur_offset == self.clus_to_offset(clus_num) + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
+                FAT_offset = (self.rsec_count * self.b_p_sec) + (clus_num * 4)  # reserved sectors + preceding FAT entries
                 FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
                     cur_offset == self.clus_to_offset(FAT_entry)  # set offset to beginning of next data cluster
@@ -166,12 +166,12 @@ class FileSystem:
             dir_name = "."
         
         if dir_name == ".":  # root has no . dir, so this is only way to list its own contents
-            for file in self.dir_contents(self.pwd_offset):
+            for file in self.dir_contents(self.pwd_clus):
                 print(str(file))
         else:
-            pwd_contents = self.dir_contents(self.pwd_offset)
+            pwd_contents = self.dir_contents(self.pwd_clus)
             if dir_name in pwd_contents:
-                for file in self.dir_contents(self.clus_to_offset(pwd_contents[dir_name]["clus_num"])):
+                for file in self.dir_contents(pwd_contents[dir_name]["clus_num"]):
                     print(str(file))
             else:
                 print("dir " + str(dir_name) + " not found")
