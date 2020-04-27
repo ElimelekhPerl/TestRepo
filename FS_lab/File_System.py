@@ -11,21 +11,21 @@ class FileSystem:
     # helper functions
 
     def read_bytes(self, start, end):  # [start, end)
-        """ 
-        Returns literal byte_string from [start, end). 
-        @Param start, end: the absolute byte offset within the img 
         """
-        
+        Returns literal byte_string from [start, end).
+        @Param start, end: the absolute byte offset within the img
+        """
+
         self.fs_file.seek(start)
         byte_string = self.fs_file.read(end - start)
         return byte_string
 
     def clus_to_offset(self, clus_num):
-        """ 
-        Returns absolute byte offset in img given cluster number. 
-        @Param clus_num: the cluster number within the img 
         """
-        
+        Returns absolute byte offset in img given cluster number.
+        @Param clus_num: the cluster number within the img
+        """
+
         data_offset = ((clus_num - 2) * self.sec_p_clus * self. b_p_sec)  # negate clus_num off-by-2, multiply in sec_p_clus and b_p_sec
         return data_offset + self.pre_data_offset  # return absolute offset by adding size of meta-data (boot + FATs) to offset within data
 
@@ -43,12 +43,12 @@ class FileSystem:
         elif attr == 32:
             return "ATTR_ARCHIVE"
 
-    def dir_contents(self, cur_clus):  
-        """ 
-        returns dictionary of files:info for DIR. 
-        @Param cur_clus: the cluster number of DIR 
+    def dir_contents(self, cur_clus):
         """
-        
+        returns dictionary of files:info for DIR.
+        @Param cur_clus: the cluster number of DIR
+        """
+
         cur_offset = self.clus_to_offset(cur_clus)
         contents = dict()
 
@@ -57,7 +57,7 @@ class FileSystem:
             if attr != 15:  # short name entry
                 if int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 229:  # not a free entry
                     attr = self.parse_attr(attr)  # use helper func to return ATTR string corresponding to attr number
-                    
+
                     name = (self.read_bytes(cur_offset, cur_offset + 8).decode()).strip()  # decode name with utf-8 from bytes, strip whitespace
                     if attr == "ATTR_DIRECTORY":
                         full_name = name
@@ -108,11 +108,11 @@ class FileSystem:
     # utility functions
 
     def info(self):
-        """ 
-        Prints out information about the following fields in both hex and base 10: 
-        BPB_BytesPerSec, BPB_SecPerClus, BPB_RsvdSecCnt, BPB_NumFATS, BPB_FATSz32 
         """
-        
+        Prints out information about the following fields in both hex and base 10:
+        BPB_BytesPerSec, BPB_SecPerClus, BPB_RsvdSecCnt, BPB_NumFATS, BPB_FATSz32
+        """
+
         fields = ["BPB_BytesPerSec", "BPB_SecPerClus", "BPB_RsvdSecCnt", "BPB_NumFATS", "BPB_FATSz32"]
 
         print("info:   field              hex       dec")
@@ -123,17 +123,17 @@ class FileSystem:
         print('        %s %7s %8d' % (fields[4].ljust(15), hex(self.sec_p_fat), self.sec_p_fat))
 
     def stat(self, param):
-        """ 
-        Prints the sizeof the file or directory name, the attributes of the file or directory name, 
-        and the first cluster number of the file or directory name if it is in the present working directory. 
-        Return an error if FILE_NAME/DIR_NAME does not exist. (Note: The size of a directory will always be zero.) 
         """
-        
+        Prints the sizeof the file or directory name, the attributes of the file or directory name,
+        and the first cluster number of the file or directory name if it is in the present working directory.
+        Return an error if FILE_NAME/DIR_NAME does not exist. (Note: The size of a directory will always be zero.)
+        """
+
         file_name = param[0]
-        if file_name == "":  
+        if file_name == "":
             print("Usage: stat [FILE_NAME/DIR_NAME]")
             return
-        
+
         contents = self.dir_contents(self.pwd_clus)
         if file_name in contents:
             print("size: " + str(contents[file_name]["size"]))
@@ -153,7 +153,7 @@ class FileSystem:
         if file_name == "":
             print("Usage: size [FILE_NAME/DIR_NAME]")
             return
-        
+
         contents = self.dir_contents(self.pwd_clus)
         if file_name in contents:
             print("size: " + str(contents[file_name]["size"]))
@@ -168,9 +168,9 @@ class FileSystem:
         handle a path longer than one directory.
         """
         dir_name = param[0]
-        if dir_name == "":  
+        if dir_name == "":
             print("Usage: cd [DIR_NAME]")
-            return 
+            return
         contents = self.dir_contents(self.pwd_clus)
         if dir_name in contents and (contents[dir_name]["attr"] == "ATTR_DIRECTORY"):
             self.pwd_clus = contents[dir_name]["clus_num"]
@@ -182,20 +182,20 @@ class FileSystem:
                 else:
                     self.pwd_name = self.pwd_name + "/" + dir_name
         else:
-            print("Directory " + dir_name + " not found in present working directory")
+            print("dir " + dir_name + " not found")
 
     def ls(self, param):
-        """ 
-        Lists the contents of DIR_NAME, including “.” and “..”
-        @Param param: valid DIR_NAME within PWD 
         """
-        
+        Lists the contents of DIR_NAME, including “.” and “..”
+        @Param param: valid DIR_NAME within PWD
+        """
+
         dir_name = param[0]
         contents = []
 
         if dir_name == "":
             dir_name = "."
-        
+
         if dir_name == ".":  # root has no . dir, so this is only way to list its own contents
             for file_name in self.dir_contents(self.pwd_clus):
                 contents.append(str(file_name))
@@ -215,13 +215,13 @@ class FileSystem:
         """
         Reads from a file named FILE_NAME, starting at POSITION, and prints NUM_BYTES.
         """
-        
+
         file_name = param[0]
-        
+
         if file_name == "":
             print("Usage: read [FILE_NAME] <Start_Position> <Num_Bytes>")
             return
-        
+
         contents = self.dir_contents(self.pwd_clus)
         if file_name in contents:
             if len(param) == 1:
@@ -251,13 +251,13 @@ class FileSystem:
                     output = output + self.read_bytes(cur_offset, cur_offset + clus_size).decode()
                     FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
                     cur_clus = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
-                
+
                 if partial_sec_size != 0:
                     cur_offset = self.clus_to_offset(cur_clus)
                     output = output + self.read_bytes(cur_offset, cur_offset + partial_sec_size).decode()
-                
+
             print(output[offset:])
-            
+
         else:
             print(str(file_name) + " not found")
 
