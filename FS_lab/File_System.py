@@ -233,13 +233,15 @@ class FileSystem:
                     num_bytes = int(param[2])
                     size = num_bytes + offset
                 else:
-                    size = contents[file_name]["size"]
+                    size = offset = 0  # range exceeds file size
 
             cur_clus = contents[file_name]["clus_num"]
             clus_size = self.b_p_sec * self.sec_p_clus
             output = ""
 
-            if size <= clus_size:  # only takes up one cluster
+            if size == 0:
+                output = "Exceeds file size of " + str(contents[file_name]["size"]) + " bytes"
+            elif size <= clus_size:  # only takes up one cluster
                 cur_offset = self.clus_to_offset(cur_clus)
                 output = self.read_bytes(cur_offset, cur_offset + size).decode()
             else:
