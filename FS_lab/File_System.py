@@ -196,14 +196,16 @@ class FileSystem:
         if dir_name == "":
             dir_name = "."
 
+        pwd_contents = self.dir_contents(self.pwd_clus)
         if dir_name == ".":  # root has no . dir, so this is only way to list its own contents
-            for file_name in self.dir_contents(self.pwd_clus):
-                contents.append(str(file_name))
+            for file_name in pwd_contents:
+                if(pwd_contents[file_name]['attr'] != "ATTR_HIDDEN" and pwd_contents[file_name]['attr'] != "ATTR_VOLUME_ID"):
+                    contents.append(str(file_name))
         else:
-            pwd_contents = self.dir_contents(self.pwd_clus)
             if dir_name in pwd_contents and (pwd_contents[dir_name]["attr"] == "ATTR_DIRECTORY"):
                 for file_name in self.dir_contents(pwd_contents[dir_name]["clus_num"]):
-                    contents.append(str(file_name))
+                    if(pwd_contents[file_name]['attr'] != "ATTR_HIDDEN" and pwd_contents[file_name]['attr'] != "ATTR_VOLUME_ID"):
+                        contents.append(str(file_name))
             else:
                 contents.append("dir " + str(dir_name) + " not found")
 
