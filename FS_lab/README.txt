@@ -29,7 +29,7 @@ EXECUTION:
             > volume                                      *outputs volume name for file system image
             > mkdir <SUBDIR_NAME>                         *creates requested sub-directory in PWD
             > rmdir <SUBDIR_NAME>                         *deletes requested sub-directory in PWD
-            > quit                                        *quit utility program
+            > quit                                        *quits utility program
 
         Note: command functionality is dependent on PWD and its contents.
 
