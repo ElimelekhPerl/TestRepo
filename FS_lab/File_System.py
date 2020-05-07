@@ -63,6 +63,8 @@ class FileSystem:
         returns dictionary of files:info for DIR.
         @Param cur_clus: the cluster number of DIR
         """
+        if cur_clus == 0:
+            cur_clus = 2
 
         cur_offset = self.clus_to_offset(cur_clus)
         contents = dict()
