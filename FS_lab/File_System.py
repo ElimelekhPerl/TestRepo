@@ -10,15 +10,32 @@ class FileSystem:
 
     # helper functions
 
+    def clus_to_offset(self, clus_num):
+        """
+        Returns absolute byte offset in img given cluster number.
+        @Param clus_num: the cluster number within the img
+        """
+
+        data_offset = ((clus_num - 2) * self.b_p_clus)  # negate clus_num off-by-2, multiply in sec_p_clus and b_p_sec
+        return data_offset + self.pre_data_offset  # return absolute offset by adding size of meta-data (boot + FATs) to offset within data
+
+    def cache_clus(self, clus_num):
+        start = self.clus_to_offset(clus_num)
+        self.fs_file.seek(start)
+        self.cached_clus_data = self.fs_file.read(self.b_p_clus)
+        self.cached_clus_num = clus_num
+
     def read_bytes(self, start, end):  # [start, end)
         """
         Returns literal byte_string from [start, end).
         @Param start, end: the absolute byte offset within the img
         """
+        current_clus = ((start - self.pre_data_offset) // self.b_p_clus) + 2
+        if current_clus != self.cached_clus_num:
+            self.cache_clus(current_clus)
+        offset = self.clus_to_offset(current_clus)
 
-        self.fs_file.seek(start)
-        byte_string = self.fs_file.read(end - start)
-        return byte_string
+        return self.cached_clus_data[(start - offset):(end - offset)]
 
     def write_bytes(self, start, buf):
         """
@@ -30,15 +47,6 @@ class FileSystem:
         self.fs_file.seek(start)
         status = self.fs_file.write(buf) == len(buf)
         return status
-    
-    def clus_to_offset(self, clus_num):
-        """
-        Returns absolute byte offset in img given cluster number.
-        @Param clus_num: the cluster number within the img
-        """
-
-        data_offset = ((clus_num - 2) * self.sec_p_clus * self. b_p_sec)  # negate clus_num off-by-2, multiply in sec_p_clus and b_p_sec
-        return data_offset + self.pre_data_offset  # return absolute offset by adding size of meta-data (boot + FATs) to offset within data
 
     def parse_attr(self, attr):
         result = []
@@ -95,9 +103,9 @@ class FileSystem:
                     contents[str(full_name)] = {'attr': attr, 'clus_num': clus_num, 'size': size}  # add dictionary entry to contents, with file name as key, list of meta-data as value
 
             cur_offset = cur_offset + 32  # advance to next dir entry
-            if cur_offset == self.clus_to_offset(cur_clus) + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
-                FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
-                FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
+            if cur_offset == self.clus_to_offset(cur_clus) + self.b_p_clus:  # reached end of current cluster, check FAT
+                FAT_offset = cur_clus * 4  # preceding FAT entries
+                FAT_entry = int.from_bytes(self.FAT[FAT_offset: FAT_offset + 4], 'little')
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
                     cur_clus = FAT_entry
                     cur_offset = self.clus_to_offset(cur_clus)  # set offset to beginning of next data cluster
@@ -111,17 +119,29 @@ class FileSystem:
     def __init__(self, img_file):
         self.fs_file = open(img_file, 'r+b')
 
-        self.b_p_sec = int.from_bytes(self.read_bytes(11, 13), 'little')
-        self.sec_p_clus = int.from_bytes(self.read_bytes(13, 14), 'little')
-        self.rsec_count = int.from_bytes(self.read_bytes(14, 16), 'little')
-        self.num_fats = int.from_bytes(self.read_bytes(16, 17), 'little')
-        self.sec_p_fat = int.from_bytes(self.read_bytes(36, 40), 'little')
-        self.eoc_marker = int.from_bytes(self.read_bytes(self.rsec_count * self.b_p_sec + 4, self.rsec_count * self.b_p_sec + 8), 'little')
+        self.fs_file.seek(11)
+        self.b_p_sec = int.from_bytes(self.fs_file.read(2), 'little')  # 11-13
+        self.sec_p_clus = int.from_bytes(self.fs_file.read(1), 'little')  # 13-14
+        self.b_p_clus = self.b_p_sec * self.sec_p_clus
+        self.rsec_count = int.from_bytes(self.fs_file.read(2), 'little')  # 14-16
+        self.num_fats = int.from_bytes(self.fs_file.read(1), 'little')  # 16-17
+        self.fs_file.seek(10, 1)  # jump to 36
+        self.sec_p_fat = int.from_bytes(self.fs_file.read(4), 'little')  # 36-40
         self.pre_data_offset = (self.rsec_count * self.b_p_sec) + (self.num_fats * self.sec_p_fat * self.b_p_sec)  # reserved sectors + FATs
-        self.root_clus = int.from_bytes(self.read_bytes(44, 48), 'little')
+        self.fs_file.seek(4, 1)  # jump to 44
+        self.root_clus = int.from_bytes(self.fs_file.read(4), 'little')  # 44-48
         self.pwd_clus = self.root_clus
         self.pwd_name = "i_am_root"
+        self.fs_file.seek(self.rsec_count * self.b_p_sec)  # jump to FAT table
+        self.FAT = self.fs_file.read(self.sec_p_fat * self.b_p_sec)  # read FAT table
+        self.eoc_marker = int.from_bytes(self.FAT[4:8], 'little') 
 
+        self.cached_clus_data = 0  # data from most recently accessed cluster
+        self.cached_clus_num = 0  # clus_num of cached data
+        self.cache_clus(self.root_clus)  # cache root clus
+
+        
+        
     # utility functions
 
     def info(self):
@@ -255,7 +275,7 @@ class FileSystem:
                     size = offset = 0  # range exceeds file size
 
             cur_clus = contents[file_name]["clus_num"]
-            clus_size = self.b_p_sec * self.sec_p_clus
+            clus_size = self.b_p_clus
             output = ""
 
             if size == 0:
@@ -342,7 +362,7 @@ class FileSystem:
                     rm_status = self.write_bytes(cur_offset, 0xE5)
                     break
             cur_offset = cur_offset + 32  # advance to next dir entry
-            if cur_offset == self.clus_to_offset(cur_clus) + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
+            if cur_offset == self.clus_to_offset(cur_clus) + (self.b_p_clus):  # reached end of current cluster, check FAT
                 FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
                 FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
