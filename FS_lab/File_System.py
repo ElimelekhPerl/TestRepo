@@ -217,8 +217,7 @@ class FileSystem:
                 contents.append("dir " + str(dir_name) + " not found")
 
         contents.sort()
-        for string in contents:
-            print(string)
+        print('   '.join(contents))
 
     def read_file(self, param):
         """
