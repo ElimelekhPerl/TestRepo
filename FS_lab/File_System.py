@@ -67,7 +67,10 @@ class FileSystem:
                         full_name = name
                     else:
                         ext = (self.read_bytes(cur_offset + 8, cur_offset + 11).decode()).strip()  # ditto for ext
-                        full_name = name + "." + ext  # if file, concat name, period, and ext for full name
+                        if ext != "":
+                            full_name = name + "." + ext  # if file, concat name, period, and ext for full name
+                        else:
+                            full_name = name
 
                     hi_clus_bytes = int.from_bytes(self.read_bytes(cur_offset + 20, cur_offset + 22), 'little')
                     lo_clus_bytes = int.from_bytes(self.read_bytes(cur_offset + 26, cur_offset + 28), 'little')
