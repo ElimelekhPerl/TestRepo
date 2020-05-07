@@ -209,8 +209,9 @@ class FileSystem:
                     contents.append(str(file_name))
         else:
             if dir_name in pwd_contents and ( "ATTR_DIRECTORY" in pwd_contents[dir_name]["attr"]):
-                for file_name in self.dir_contents(pwd_contents[dir_name]["clus_num"]):
-                    if("ATTR_HIDDEN" not in pwd_contents[file_name]['attr'] and "ATTR_VOLUME_ID" not in pwd_contents[file_name]['attr']):
+                subdir_contents = self.dir_contents(pwd_contents[dir_name]["clus_num"])
+                for file_name in subdir_contents:
+                    if("ATTR_HIDDEN" not in subdir_contents[file_name]['attr'] and "ATTR_VOLUME_ID" not in subdir_contents[file_name]['attr']):
                         contents.append(str(file_name))
             else:
                 contents.append("dir " + str(dir_name) + " not found")
