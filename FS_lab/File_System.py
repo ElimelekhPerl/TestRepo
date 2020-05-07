@@ -108,7 +108,6 @@ class FileSystem:
         self.eoc_marker = int.from_bytes(self.read_bytes(self.rsec_count * self.b_p_sec + 4, self.rsec_count * self.b_p_sec + 8), 'little')
         self.pre_data_offset = (self.rsec_count * self.b_p_sec) + (self.num_fats * self.sec_p_fat * self.b_p_sec)  # reserved sectors + FATs
         self.root_clus = int.from_bytes(self.read_bytes(44, 48), 'little')
-        self.root_dir = self.clus_to_offset(self.root_clus)
         self.pwd_clus = self.root_clus
         self.pwd_name = "i_am_root"
 
@@ -277,6 +276,12 @@ class FileSystem:
         will be found in the root directory.  If there is no volume name, print “Error: volume name
         not found.”
         """
+        root_contents = self.dir_contents(self.root_clus)
+        for file_name in root_contents:
+            if "ATTR_VOLUME_ID" in root_contents[file_name]['attr']:
+                print("Volume ID: " + file_name)
+                return
+        print("Error: volume name not found")
 
     def mkdir(self, param):
         """
