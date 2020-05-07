@@ -20,6 +20,17 @@ class FileSystem:
         byte_string = self.fs_file.read(end - start)
         return byte_string
 
+    def write_bytes(self, start, buf):
+        """
+        Overwrites FS with literal buf from [start...start+len(buf)
+        Returns true if successfully wrote all of buf
+        @Param start the absolute byte offset within the img
+        @Param buf the bytes to write, in string form
+        """
+        self.fs_file.seek(start)
+        status = self.fs_file.write(buf) == len(buf)
+        return status
+    
     def clus_to_offset(self, clus_num):
         """
         Returns absolute byte offset in img given cluster number.
@@ -98,7 +109,7 @@ class FileSystem:
     # constructor
 
     def __init__(self, img_file):
-        self.fs_file = open(img_file, 'rb+')
+        self.fs_file = open(img_file, 'r+b')
 
         self.b_p_sec = int.from_bytes(self.read_bytes(11, 13), 'little')
         self.sec_p_clus = int.from_bytes(self.read_bytes(13, 14), 'little')
@@ -208,7 +219,7 @@ class FileSystem:
                 if("ATTR_HIDDEN" not in pwd_contents[file_name]['attr'] and "ATTR_VOLUME_ID" not in pwd_contents[file_name]['attr']):
                     contents.append(str(file_name))
         else:
-            if dir_name in pwd_contents and ( "ATTR_DIRECTORY" in pwd_contents[dir_name]["attr"]):
+            if dir_name in pwd_contents and ("ATTR_DIRECTORY" in pwd_contents[dir_name]["attr"]):
                 subdir_contents = self.dir_contents(pwd_contents[dir_name]["clus_num"])
                 for file_name in subdir_contents:
                     if("ATTR_HIDDEN" not in subdir_contents[file_name]['attr'] and "ATTR_VOLUME_ID" not in subdir_contents[file_name]['attr']):
@@ -293,6 +304,9 @@ class FileSystem:
         message on stderr (fd 2).
         """
 
+    def check_dir_empty(self, dir_to_rm):
+        return True
+    
     def rmdir(self, param):
         """
         Delete a subdirectory in the current directory, but only if it is empty!  If you
@@ -300,6 +314,52 @@ class FileSystem:
         (fd 2).  Follow the FAT32 rules for deleting stuff; do not do a full overwrite or zero anything
         out!
         """
+        # Error Check
+        if len(param) < 1:
+            print("Usage: /> rmdir DIR")
+            return
+        pwd_contents = self.dir_contents(self.pwd_clus)
+        dir_to_rm = param[0]
+        if dir_to_rm not in pwd_contents:
+            print("Error: " + dir_to_rm + " not found.", file=sys.stderr)
+            return
+        if "ATTR_DIRECTORY" not in pwd_contents[dir_to_rm]['attr']:
+            print("Error: " + dir_to_rm + "not a directory.", file=sys.stderr)
+            return
+        if not self.check_dir_empty(dir_to_rm):
+            print("Error: DIR " + dir_to_rm + " not empty.", file=sys.stderr)
+            return
+        
+        # Find directory entry, and set first byte to 0xE5
+        dir_to_rm_clus = pwd_contents[dir_to_rm]['clus_num']
+        cur_clus = self.pwd_clus
+        cur_offset = self.clus_to_offset(cur_clus)
+
+        while int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 0: # while haven't reached end_of_dir marker
+            if int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 229:  # not a free entry
+                name = (self.read_bytes(cur_offset, cur_offset + 8).decode()).strip()  # decode name with utf-8 from bytes, strip whitespace
+                if name == dir_to_rm:
+                    rm_status = self.write_bytes(cur_offset, 0xE5)
+                    break
+            cur_offset = cur_offset + 32  # advance to next dir entry
+            if cur_offset == self.clus_to_offset(cur_clus) + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
+                FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
+                FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
+                if FAT_entry != self.eoc_marker:  # dir continues into another cluster
+                    cur_clus = FAT_entry
+                    cur_offset = self.clus_to_offset(cur_clus)  # set offset to beginning of next data cluster
+                else:  # eoc reached without clearing dir_entry...
+                    break
+    
+        # clear FAT Table Entry
+        if rm_status:
+            while dir_to_rm_clus != self.eoc_marker:
+                FAT_offset = (self.rsec_count * self.b_p_sec) + (dir_to_rm_clus * 4)  # reserved sectors + preceding FAT entries
+                dir_to_rm_clus = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
+                highest_bytes_shifted = dir_to_rm_clus >> 16
+                self.write_bytes(FAT_offset, 0x0000F000 & highest_bytes_shifted)
+        if not rm_status:
+            print("Error: Failed to remove " + dir_to_rm, file=sys.stderr)
 
 
 # main routine
