@@ -307,12 +307,12 @@ class FileSystem:
 
 argv = sys.argv
 
-if argv[1] != "fat32.img":
-    print("Usage: > File_System.py fat32.img")  # may want to flesh out usage info
+if len(argv) < 1:
+    print("Usage: > File_System.py FAT32IMG")
     exit()
 
 else:
-    fs = FileSystem("fat32.img")
+    fs = FileSystem(argv[1])
 
     while True:
         full_command = (input(str(fs.pwd_name) + "/ > ")).split(" ")
