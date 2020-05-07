@@ -30,18 +30,22 @@ class FileSystem:
         return data_offset + self.pre_data_offset  # return absolute offset by adding size of meta-data (boot + FATs) to offset within data
 
     def parse_attr(self, attr):
-        if attr == 1:
-            return "ATTR_READ_ONLY"
-        elif attr == 2:
-            return "ATTR_HIDDEN"
-        elif attr == 4:
-            return "ATTR_SYSTEM"
-        elif attr == 8:
-            return "ATTR_VOLUME_ID"
-        elif attr == 16:
-            return "ATTR_DIRECTORY"
-        elif attr == 32:
-            return "ATTR_ARCHIVE"
+        result = []
+        if attr & 1:
+            result.append("ATTR_READ_ONLY")
+        if attr & 2:
+            result.append("ATTR_HIDDEN")
+        if attr & 4:
+            result.append("ATTR_SYSTEM")
+        if attr & 8:
+            result.append("ATTR_VOLUME_ID")
+        if attr & 16:
+            result.append("ATTR_DIRECTORY")
+        if attr & 32:
+            result.append("ATTR_ARCHIVE")
+        if result == []:
+            result.append("NONE")
+        return result
 
     def dir_contents(self, cur_clus):
         """
@@ -56,10 +60,10 @@ class FileSystem:
             attr = int.from_bytes(self.read_bytes(cur_offset + 11, cur_offset + 12), 'little')
             if attr != 15:  # short name entry
                 if int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 229:  # not a free entry
-                    attr = self.parse_attr(attr)  # use helper func to return ATTR string corresponding to attr number
+                    attr = self.parse_attr(attr)  # use helper func to return ATTR list corresponding to attr number
 
                     name = (self.read_bytes(cur_offset, cur_offset + 8).decode()).strip()  # decode name with utf-8 from bytes, strip whitespace
-                    if attr == "ATTR_DIRECTORY":
+                    if "ATTR_DIRECTORY" in attr:
                         full_name = name
                     else:
                         ext = (self.read_bytes(cur_offset + 8, cur_offset + 11).decode()).strip()  # ditto for ext
@@ -69,7 +73,7 @@ class FileSystem:
                     lo_clus_bytes = int.from_bytes(self.read_bytes(cur_offset + 26, cur_offset + 28), 'little')
                     clus_num = (hi_clus_bytes << 16) + lo_clus_bytes  # concatenate hi and lo words for starting clus_num of file
 
-                    if attr == "ATTR_DIRECTORY":
+                    if "ATTR_DIRECTORY" in attr:
                         size = 0
                     else:
                         size = int.from_bytes(self.read_bytes(cur_offset + 28, cur_offset + 32), 'little')
@@ -137,7 +141,7 @@ class FileSystem:
         contents = self.dir_contents(self.pwd_clus)
         if file_name in contents:
             print("size: " + str(contents[file_name]["size"]))
-            print("attr: " + str(contents[file_name]["attr"]))
+            print("attr: " + ', '.join(contents[file_name]["attr"]))
             print("starting cluster: " + str(contents[file_name]["clus_num"]))
 
         else:
@@ -172,7 +176,7 @@ class FileSystem:
             print("Usage: cd [DIR_NAME]")
             return
         contents = self.dir_contents(self.pwd_clus)
-        if dir_name in contents and (contents[dir_name]["attr"] == "ATTR_DIRECTORY"):
+        if dir_name in contents and ("ATTR_DIRECTORY" in contents[dir_name]["attr"]):
             self.pwd_clus = contents[dir_name]["clus_num"]
             if self.pwd_clus == 0:
                 self.pwd_clus = self.root_clus
@@ -199,12 +203,12 @@ class FileSystem:
         pwd_contents = self.dir_contents(self.pwd_clus)
         if dir_name == ".":  # root has no . dir, so this is only way to list its own contents
             for file_name in pwd_contents:
-                if(pwd_contents[file_name]['attr'] != "ATTR_HIDDEN" and pwd_contents[file_name]['attr'] != "ATTR_VOLUME_ID"):
+                if("ATTR_HIDDEN" not in pwd_contents[file_name]['attr'] and "ATTR_VOLUME_ID" not in pwd_contents[file_name]['attr']):
                     contents.append(str(file_name))
         else:
             if dir_name in pwd_contents and (pwd_contents[dir_name]["attr"] == "ATTR_DIRECTORY"):
                 for file_name in self.dir_contents(pwd_contents[dir_name]["clus_num"]):
-                    if(pwd_contents[file_name]['attr'] != "ATTR_HIDDEN" and pwd_contents[file_name]['attr'] != "ATTR_VOLUME_ID"):
+                    if("ATTR_HIDDEN" not in pwd_contents[file_name]['attr'] and "ATTR_VOLUME_ID" not in pwd_contents[file_name]['attr']):
                         contents.append(str(file_name))
             else:
                 contents.append("dir " + str(dir_name) + " not found")
