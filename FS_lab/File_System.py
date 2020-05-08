@@ -46,6 +46,15 @@ class FileSystem:
         """
         self.fs_file.seek(start)
         status = self.fs_file.write(buf) == len(buf)
+
+        if start > self.pre_data_offset:
+            current_clus = ((start - self.pre_data_offset) // self.b_p_clus) + 2  # get current clus num
+            self.cache_clus(current_clus)  # reload current clus in cache
+
+        else:
+            self.fs_file.seek(self.rsec_count * self.b_p_sec)  # jump to FAT table
+            self.FAT = self.fs_file.read(self.sec_p_fat * self.b_p_sec)  # refresh FAT table
+
         return status
 
     def parse_attr(self, attr):
@@ -121,13 +130,9 @@ class FileSystem:
 
         self.fs_file.seek(11)
         self.b_p_sec = int.from_bytes(self.fs_file.read(2), 'little')  # 11-13
-        #self.fs_file.seek(1,1)
         self.sec_p_clus = int.from_bytes(self.fs_file.read(1), 'little')  # 13-14
-        #self.fs_file.seek(1,1)
         self.b_p_clus = self.b_p_sec * self.sec_p_clus
-        #self.fs_file.seek(1,1)
         self.rsec_count = int.from_bytes(self.fs_file.read(2), 'little')  # 14-16
-        #self.fs_file.seek(1,1)
         self.num_fats = int.from_bytes(self.fs_file.read(1), 'little')  # 16-17
         self.fs_file.seek(36)  # jump to 36
         self.sec_p_fat = int.from_bytes(self.fs_file.read(4), 'little')  # 36-40
@@ -143,9 +148,7 @@ class FileSystem:
         self.cached_clus_data = 0  # data from most recently accessed cluster
         self.cached_clus_num = 0  # clus_num of cached data
         self.cache_clus(self.root_clus)  # cache root clus
-
-        
-        
+   
     # utility functions
 
     def info(self):
