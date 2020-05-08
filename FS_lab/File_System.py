@@ -42,7 +42,7 @@ class FileSystem:
         Overwrites FS with literal buf from [start...start+len(buf)
         Returns true if successfully wrote all of buf
         @Param start the absolute byte offset within the img
-        @Param buf the bytes to write, in string form
+        @Param buf the bytes to write, in byte-like-object form
         """
         self.fs_file.seek(start)
         status = self.fs_file.write(buf) == len(buf)
@@ -80,6 +80,8 @@ class FileSystem:
         returns dictionary of files:info for DIR.
         @Param cur_clus: the cluster number of DIR
         """
+        if cur_clus == 0:
+            cur_clus = 2
 
         cur_offset = self.clus_to_offset(cur_clus)
         contents = dict()
@@ -143,7 +145,8 @@ class FileSystem:
         self.pwd_name = "i_am_root"
         self.fs_file.seek(self.rsec_count * self.b_p_sec)  # jump to FAT table
         self.FAT = self.fs_file.read(self.sec_p_fat * self.b_p_sec)  # read FAT table
-        self.eoc_marker = int.from_bytes(self.FAT[4:8], 'little') 
+        self.eoc_marker_bytes = self.FAT[4:8]
+        self.eoc_marker = int.from_bytes(self.eoc_marker_bytes, 'little') 
 
         self.cached_clus_data = 0  # data from most recently accessed cluster
         self.cached_clus_num = 0  # clus_num of cached data
@@ -322,6 +325,9 @@ class FileSystem:
                 return
         print("Error: volume name not found")
 
+    def validate_dir_name(self, dir_name):
+        return len(dir_name) <= 8 and dir_name[0] != '.'    
+    
     def mkdir(self, param):
         """
         Make a new subdirectory in the current directory.  This may require the allocation
@@ -330,9 +336,101 @@ class FileSystem:
         sector.  If you are unable to create the subdirectory for any reason, you must print an error
         message on stderr (fd 2).
         """
+        
+        dir_to_mk = param[0]
+        if dir_to_mk == "":
+            print("Usage: / > mkdir DIR")
+            return
+        pwd_contents = self.dir_contents(self.pwd_clus)
+        if dir_to_mk in pwd_contents:
+            print("Error: \"" + dir_to_mk + "\" already in pwd.", file=sys.stderr)
+            return
+        if not self.validate_dir_name(dir_to_mk):
+            print("Error: \"" + dir_to_mk + "\" invalid dir name.", file=sys.stderr)
+            return
 
-    def check_dir_empty(self, dir_to_rm):
-        return True
+        # Find open FAT Entry
+        open_FAT_entry = -1
+        open_FAT_clus_num = 0
+        open_FAT_offset = (self.rsec_count * self.b_p_sec) + (open_FAT_clus_num * 4)  # reserved sectors + preceding FAT entries
+        while (open_FAT_entry & 0x0FFFFFFF) != 0: # find first open FAT entry
+            open_FAT_clus_num += 1
+            open_FAT_offset += 4
+            open_FAT_entry = int.from_bytes(self.read_bytes(open_FAT_offset, open_FAT_offset + 4), 'little')
+        
+        # make byte buf of directory entry    
+        byte_buf = bytearray(0)
+        byte_buf.extend(map(ord, dir_to_mk))
+        while len(byte_buf) < 11:
+            byte_buf.extend(b' ')
+        byte_buf.extend(bytes.fromhex('10 00 00 0000 0000 0000'))
+        high_clus_bytes = ((open_FAT_clus_num & 0xFF000000) >> 24) | ((open_FAT_clus_num & 0x00FF0000) >> 8) & 0x0000FFFF
+        lo_clus_bytes = ((open_FAT_clus_num & 0x000000FF) << 8) | ((open_FAT_clus_num & 0x0000FF00) >> 8)
+        byte_buf.extend(int.to_bytes(high_clus_bytes, 2, 'big'))
+        byte_buf.extend(bytes.fromhex('0000 0000'))
+        byte_buf.extend(int.to_bytes(lo_clus_bytes, 2, 'big'))
+        byte_buf.extend(bytes.fromhex('0000 0000'))
+        if len(byte_buf) != 32:
+            print("BYTE BUF ERROR: " + byte_buf, file=sys.stderr)
+            return
+
+        # Find open directory entry
+        cur_clus = self.pwd_clus
+        cur_offset = self.clus_to_offset(cur_clus)
+        mk_status = False
+        while int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 0: # while haven't reached end_of_dir marker
+            if int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') == 229: # if free
+                mk_status = self.write_bytes(cur_offset, byte_buf)
+                break
+            cur_offset = cur_offset + 32  # advance to next dir entry
+            if cur_offset == self.clus_to_offset(cur_clus) + (self.sec_p_clus * self.b_p_sec):  # reached end of current cluster, check FAT
+                FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
+                FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little') & 0x0FFFFFFF
+                if FAT_entry != self.eoc_marker:  # dir continues into another cluster
+                    cur_clus = FAT_entry
+                    cur_offset = self.clus_to_offset(cur_clus)  # set offset to beginning of next data cluster
+                else:  
+                    print("Error: could not mkdir.", file=sys.stderr)
+                    return
+        if cur_offset == self.clus_to_offset(cur_clus) + (self.sec_p_clus * self.b_p_sec) - 32: # if no room in sector
+            print("Error: could not mkdir.", file=sys.stderr)
+            return
+        mk_status = self.write_bytes(cur_offset, byte_buf)
+        self.write_bytes(cur_offset + 32, bytes.fromhex('00')) # Write end of dir marker
+        
+        if not mk_status:
+            print("Error: could not make " + dir_to_mk, file=sys.stderr)
+            return
+        mk_status = self.write_bytes(open_FAT_offset, self.eoc_marker_bytes)
+        if not mk_status:
+            print("Error: could not make " + dir_to_mk, file=sys.stderr)
+            return
+        
+        # make . and .. in new dir
+        dir_entry_buf = bytearray(0)
+        dir_entry_buf.extend(b'.          ') # name
+        dir_entry_buf.extend(bytes.fromhex('10 00 00 0000 0000 0000')) # attr
+        dir_entry_buf.extend(int.to_bytes(high_clus_bytes, 2, 'big'))
+        dir_entry_buf.extend(bytes.fromhex('0000 0000'))
+        dir_entry_buf.extend(int.to_bytes(lo_clus_bytes, 2, 'big'))
+        dir_entry_buf.extend(bytes.fromhex('0000 0000'))
+        dir_entry_buf.extend(b'..         ') # name
+        dir_entry_buf.extend(bytes.fromhex('10 00 00 0000 0000 0000')) # attr
+        high_parent_clus_bytes = ((self.pwd_clus & 0xFF000000) >> 24) | ((self.pwd_clus & 0x00FF0000) >> 8) & 0x0000FFFF
+        lo_parent_clus_bytes = ((self.pwd_clus & 0x000000FF) << 8) | ((self.pwd_clus & 0x0000FF00) >> 8)
+        dir_entry_buf.extend(int.to_bytes(high_parent_clus_bytes, 2, 'big'))
+        dir_entry_buf.extend(bytes.fromhex('0000 0000'))
+        dir_entry_buf.extend(int.to_bytes(lo_parent_clus_bytes, 2, 'big'))
+        dir_entry_buf.extend(bytes.fromhex('0000 0000 00'))
+        if(len(dir_entry_buf) != 65):
+            print(". and .. buffer ERROR: " + dir_entry_buf)
+        mk_status = self.write_bytes(self.clus_to_offset(open_FAT_clus_num), dir_entry_buf)
+        if not mk_status:
+            print("Error: could not make . and .. for: " + dir_to_mk, file=sys.stderr)
+        
+    def check_dir_empty(self, dir_clus):
+        dir_stuff = self.dir_contents(dir_clus)
+        return len(dir_stuff) <= 2
     
     def rmdir(self, param):
         """
@@ -342,23 +440,23 @@ class FileSystem:
         out!
         """
         # Error Check
-        if len(param) < 1:
-            print("Usage: /> rmdir DIR")
+        dir_to_rm = param[0]
+        if dir_to_rm == "" or dir_to_rm == "." or dir_to_rm == "..":
+            print("Usage: / > rmdir DIR")
             return
         pwd_contents = self.dir_contents(self.pwd_clus)
-        dir_to_rm = param[0]
         if dir_to_rm not in pwd_contents:
             print("Error: " + dir_to_rm + " not found.", file=sys.stderr)
             return
         if "ATTR_DIRECTORY" not in pwd_contents[dir_to_rm]['attr']:
-            print("Error: " + dir_to_rm + "not a directory.", file=sys.stderr)
+            print("Error: " + dir_to_rm + " not a directory.", file=sys.stderr)
             return
-        if not self.check_dir_empty(dir_to_rm):
+        dir_to_rm_clus = pwd_contents[dir_to_rm]['clus_num']
+        if not self.check_dir_empty(dir_to_rm_clus):
             print("Error: DIR " + dir_to_rm + " not empty.", file=sys.stderr)
             return
         
         # Find directory entry, and set first byte to 0xE5
-        dir_to_rm_clus = pwd_contents[dir_to_rm]['clus_num']
         cur_clus = self.pwd_clus
         cur_offset = self.clus_to_offset(cur_clus)
 
@@ -366,12 +464,12 @@ class FileSystem:
             if int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 229:  # not a free entry
                 name = (self.read_bytes(cur_offset, cur_offset + 8).decode()).strip()  # decode name with utf-8 from bytes, strip whitespace
                 if name == dir_to_rm:
-                    rm_status = self.write_bytes(cur_offset, 0xE5)
+                    rm_status = self.write_bytes(cur_offset, bytes.fromhex('E5'))
                     break
             cur_offset = cur_offset + 32  # advance to next dir entry
             if cur_offset == self.clus_to_offset(cur_clus) + (self.b_p_clus):  # reached end of current cluster, check FAT
                 FAT_offset = (self.rsec_count * self.b_p_sec) + (cur_clus * 4)  # reserved sectors + preceding FAT entries
-                FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
+                FAT_entry = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little') & 0x0FFFFFFF
                 if FAT_entry != self.eoc_marker:  # dir continues into another cluster
                     cur_clus = FAT_entry
                     cur_offset = self.clus_to_offset(cur_clus)  # set offset to beginning of next data cluster
@@ -380,11 +478,12 @@ class FileSystem:
     
         # clear FAT Table Entry
         if rm_status:
-            while dir_to_rm_clus != self.eoc_marker:
+            while (dir_to_rm_clus & 0x0FFFFFFF) != (self.eoc_marker & 0x0FFFFFFF):
                 FAT_offset = (self.rsec_count * self.b_p_sec) + (dir_to_rm_clus * 4)  # reserved sectors + preceding FAT entries
                 dir_to_rm_clus = int.from_bytes(self.read_bytes(FAT_offset, FAT_offset + 4), 'little')
-                highest_bytes_shifted = dir_to_rm_clus >> 16
-                self.write_bytes(FAT_offset, 0x0000F000 & highest_bytes_shifted)
+                high_byte = 0xF0000000 & dir_to_rm_clus
+                byte_buf = (high_byte).to_bytes(4, 'little')
+                self.write_bytes(FAT_offset, byte_buf)
         if not rm_status:
             print("Error: Failed to remove " + dir_to_rm, file=sys.stderr)
 
