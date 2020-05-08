@@ -121,14 +121,18 @@ class FileSystem:
 
         self.fs_file.seek(11)
         self.b_p_sec = int.from_bytes(self.fs_file.read(2), 'little')  # 11-13
+        #self.fs_file.seek(1,1)
         self.sec_p_clus = int.from_bytes(self.fs_file.read(1), 'little')  # 13-14
+        #self.fs_file.seek(1,1)
         self.b_p_clus = self.b_p_sec * self.sec_p_clus
+        #self.fs_file.seek(1,1)
         self.rsec_count = int.from_bytes(self.fs_file.read(2), 'little')  # 14-16
+        #self.fs_file.seek(1,1)
         self.num_fats = int.from_bytes(self.fs_file.read(1), 'little')  # 16-17
-        self.fs_file.seek(10, 1)  # jump to 36
+        self.fs_file.seek(36)  # jump to 36
         self.sec_p_fat = int.from_bytes(self.fs_file.read(4), 'little')  # 36-40
         self.pre_data_offset = (self.rsec_count * self.b_p_sec) + (self.num_fats * self.sec_p_fat * self.b_p_sec)  # reserved sectors + FATs
-        self.fs_file.seek(4, 1)  # jump to 44
+        self.fs_file.seek(44)  # jump to 44
         self.root_clus = int.from_bytes(self.fs_file.read(4), 'little')  # 44-48
         self.pwd_clus = self.root_clus
         self.pwd_name = "i_am_root"
@@ -355,7 +359,7 @@ class FileSystem:
         cur_clus = self.pwd_clus
         cur_offset = self.clus_to_offset(cur_clus)
 
-        while int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 0: # while haven't reached end_of_dir marker
+        while int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 0:  # while haven't reached end_of_dir marker
             if int.from_bytes(self.read_bytes(cur_offset, cur_offset + 1), 'little') != 229:  # not a free entry
                 name = (self.read_bytes(cur_offset, cur_offset + 8).decode()).strip()  # decode name with utf-8 from bytes, strip whitespace
                 if name == dir_to_rm:
